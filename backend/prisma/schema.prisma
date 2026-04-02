@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(uuid())
+  nome          String
+  email         String       @unique
+  senha         String
+  universidade  String
+  limiteFaltas  Float?       // porcentagem limite de faltas (ex: 25)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  disciplinas   Disciplina[]
+  faltas        Falta[]
+}
+
+model Disciplina {
+  id                String   @id @default(uuid())
+  nome              String
+  horas             Int
+  porcentagemFalta  Float    // porcentagem que cada falta representa
+  diasSemana        String   // JSON array: ["segunda", "quarta"]
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  faltas            Falta[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Falta {
+  id            String     @id @default(uuid())
+  userId        String
+  disciplinaId  String
+  data          DateTime
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  disciplina    Disciplina @relation(fields: [disciplinaId], references: [id], onDelete: Cascade)
+  createdAt     DateTime   @default(now())
+}
