@@ -22,7 +22,9 @@ async function request(endpoint: string, options: RequestInit = {}) {
     throw new Error(error.message || `Erro ${res.status}`);
   }
 
-  return res.json();
+  const text = await res.text();
+  if (!text.trim()) return null;
+  return JSON.parse(text);
 }
 
 export const api = {
@@ -40,7 +42,7 @@ export const api = {
     get: (id: string) => request(`/disciplinas/${id}`),
     create: (data: { nome: string; horas: number; porcentagemFalta: number; diasSemana: string[] }) =>
       request('/disciplinas', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: { nome?: string; horas?: number; porcentagemFalta?: number; diasSemana?: string[] }) =>
+    update: (id: string, data: { nome?: string; horas?: number; porcentagemFalta?: number; diasSemana?: string[]; faltasIniciais?: number }) =>
       request(`/disciplinas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request(`/disciplinas/${id}`, { method: 'DELETE' }),
   },
@@ -50,5 +52,6 @@ export const api = {
       request('/faltas', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: string) => request(`/faltas/${id}`, { method: 'DELETE' }),
     calcular: () => request('/faltas/calcular'),
+    otimizar: () => request('/faltas/otimizar'),
   },
 };

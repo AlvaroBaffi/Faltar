@@ -9,10 +9,11 @@ export abstract class DisciplinaRepository {
     porcentagemFalta: number;
     diasSemana: string[];
     userId: string;
+    faltasIniciais?: number;
   }): Promise<Disciplina>;
   abstract update(
     id: string,
-    data: Partial<{ nome: string; horas: number; porcentagemFalta: number; diasSemana: string[] }>,
+    data: Partial<{ nome: string; horas: number; porcentagemFalta: number; diasSemana: string[]; faltasIniciais: number }>,
   ): Promise<Disciplina>;
   abstract delete(id: string): Promise<void>;
 }

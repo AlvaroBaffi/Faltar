@@ -18,6 +18,11 @@ export class FaltaController {
     return this.faltaService.calcularDiasDisponiveis(req.user.userId);
   }
 
+  @Get('otimizar')
+  otimizar(@Request() req: any) {
+    return this.faltaService.calcularOtimizacao(req.user.userId);
+  }
+
   @Post()
   create(@Request() req: any, @Body() dto: CreateFaltaDto) {
     return this.faltaService.create(req.user.userId, dto);

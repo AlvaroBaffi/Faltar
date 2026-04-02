@@ -11,6 +11,7 @@ interface Disciplina {
   horas: number;
   porcentagemFalta: number;
   diasSemana: string[];
+  faltasIniciais?: number;
 }
 
 interface UserProfile {
@@ -25,9 +26,13 @@ interface FaltaInfo {
   disciplinaNome: string;
   faltasUsadas: number;
   faltasMaximas: number;
+  faltasRestantes: number;
   porcentagemAtual: number;
   diasPermitidos: string[];
   diasSemana: string[];
+  atingiuLimite: boolean;
+  bloqueadaPorOutra: boolean;
+  podeFaltarHoje: boolean;
 }
 
 interface Falta {
@@ -77,6 +82,8 @@ export default function DisciplinasPage() {
   const [removendo, setRemovendo] = useState<string | null>(null);
   const [registrando, setRegistrando] = useState<string | null>(null);
   const [registrandoTodas, setRegistrandoTodas] = useState(false);
+  const [faltasIniciaisEdit, setFaltasIniciaisEdit] = useState<Record<string, string>>({});
+  const [salvandoFaltasIniciais, setSalvandoFaltasIniciais] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [faltaPlanejadaId, setFaltaPlanejadaId] = useState<string | null>(null);
   const [faltaPlanejadaData, setFaltaPlanejadaData] = useState('');
@@ -218,6 +225,7 @@ export default function DisciplinasPage() {
   };
 
   const handleRemoverUltimaFalta = async (disciplinaId: string) => {
+    console.log('Removendo falta da disciplina', disciplinaId);
     setRemovendo(disciplinaId);
     setError('');
     setSuccessMsg('');
@@ -240,14 +248,23 @@ export default function DisciplinasPage() {
   const hojeNomeDia = DIAS_SEMANA_MAP[new Date().getDay()];
 
   const disciplinasHoje = disciplinas.filter((d) => d.diasSemana.includes(hojeNomeDia));
-  const todasFaltasHojeRegistradas = disciplinasHoje.length > 0 && disciplinasHoje.every((d) => faltasHoje.has(d.id));
+
+  // Caso 5: se QUALQUER disciplina de hoje atingiu o limite, bloquear todas as de hoje
+  const algumaDiaAtingiuLimite = disciplinasHoje.some((d) => {
+    const info = faltasInfo[d.id];
+    return info?.atingiuLimite;
+  });
+
+  const todasFaltasHojeRegistradas = disciplinasHoje.length > 0 && (
+    algumaDiaAtingiuLimite || disciplinasHoje.some((d) => faltasHoje.has(d.id))
+  );
 
   const handleRegistrarTodasHoje = async () => {
     setRegistrandoTodas(true);
     setError('');
     setSuccessMsg('');
     const hoje = new Date().toISOString().split('T')[0];
-    const pendentes = disciplinasHoje.filter((d) => !faltasHoje.has(d.id));
+    const pendentes = disciplinasHoje.filter((d) => !faltasHoje.has(d.id) && (faltasInfo[d.id]?.podeFaltarHoje ?? false));
     try {
       await Promise.all(pendentes.map((d) => api.faltas.create({ disciplinaId: d.id, data: hoje })));
       setSuccessMsg(`Faltas registradas em ${pendentes.length} matéria(s)!`);
@@ -260,6 +277,22 @@ export default function DisciplinasPage() {
     }
   };
 
+  const handleSalvarFaltasIniciais = async (discId: string) => {
+    setSalvandoFaltasIniciais(discId);
+    try {
+      const raw = faltasIniciaisEdit[discId];
+      const value = raw !== undefined ? Math.max(0, parseInt(raw, 10) || 0) : 0;
+      await api.disciplinas.update(discId, { faltasIniciais: value });
+      setSuccessMsg('Faltas iniciais salvas!');
+      setTimeout(() => setSuccessMsg(''), 2500);
+      loadData();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSalvandoFaltasIniciais(null);
+    }
+  };
+
   const resetForm = () => {
     setForm({ nome: '', horas: 60, porcentagemFalta: 25, diasSemana: [] });
     setEditingId(null);
@@ -268,19 +301,38 @@ export default function DisciplinasPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-jojo-gold font-jojo text-3xl animate-menacing">ゴゴゴ...</div>
+      <div className="min-h-screen flex items-center justify-center speed-lines-converge">
+        <div className="text-center">
+          <div className="text-jojo-gold font-jojo text-4xl animate-menacing mb-2">ゴゴゴ...</div>
+          <div className="flex justify-center gap-3 mt-3">
+            <span className="jojo-go-float text-2xl">ゴ</span>
+            <span className="jojo-go-float text-3xl">ゴ</span>
+            <span className="jojo-go-float text-2xl">ゴ</span>
+          </div>
+          <p className="text-purple-400 text-sm mt-2 font-body">Invocando seu Stand...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-20 speed-lines">
+    <div className="min-h-screen pb-20 speed-lines jojo-menacing-bg">
+      {/* Floating ゴ decorations */}
+      <div className="fixed top-24 right-3 pointer-events-none z-30 opacity-60">
+        <span className="jojo-go-float text-3xl block">ゴ</span>
+      </div>
+      <div className="fixed bottom-36 left-2 pointer-events-none z-30 opacity-40">
+        <span className="jojo-go-float text-2xl block" style={{ animationDelay: '-1.5s' }}>ゴ</span>
+      </div>
+      <div className="fixed top-1/2 right-1 pointer-events-none z-30 opacity-30">
+        <span className="jojo-go-float text-xl block" style={{ animationDelay: '-0.8s' }}>ゴ</span>
+      </div>
+
       {/* Header */}
       <div className="bg-gradient-to-r from-jojo-darkPurple via-purple-900 to-jojo-darkPurple border-b-2 border-jojo-gold/30 p-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
-            <h1 className="font-jojo text-2xl text-jojo-gold">「MATÉRIAS」</h1>
+            <h1 className="font-jojo text-2xl text-jojo-gold menacing-text">「MATÉRIAS」</h1>
             <p className="text-purple-300 text-sm">{profile?.universidade}</p>
           </div>
           <button
@@ -298,7 +350,7 @@ export default function DisciplinasPage() {
 
       {/* Limite info */}
       <div className="max-w-lg mx-auto px-4 mt-4">
-        <div className="bg-purple-900/40 border border-purple-700/50 rounded-xl p-3 flex items-center justify-between">
+        <div className="bg-purple-900/40 border border-purple-700/50 rounded-xl p-3 flex items-center justify-between stand-aura border-menacing">
           <span className="text-purple-300 text-sm">Limite de faltas:</span>
           <span className="font-jojo text-jojo-gold text-lg">{profile?.limiteFaltas ?? 25}%</span>
         </div>
@@ -307,8 +359,8 @@ export default function DisciplinasPage() {
       {/* Success message */}
       {successMsg && (
         <div className="max-w-lg mx-auto px-4 mt-3">
-          <div className="bg-green-500/20 border border-green-500 text-green-300 p-3 rounded-xl text-sm text-center font-bold">
-            {successMsg}
+          <div className="bg-green-500/20 border border-green-500 text-green-300 p-3 rounded-xl text-sm text-center font-bold font-jojo tracking-wide">
+            ✧ {successMsg} ✧
           </div>
         </div>
       )}
@@ -317,8 +369,14 @@ export default function DisciplinasPage() {
       <div className="max-w-lg mx-auto px-4 mt-4 space-y-3">
         {disciplinas.length === 0 && (
           <div className="text-center py-12">
+            <div className="flex justify-center gap-2 mb-3">
+              <span className="jojo-go-float text-2xl">ゴ</span>
+              <span className="jojo-go-float text-3xl">ゴ</span>
+              <span className="jojo-go-float text-2xl">ゴ</span>
+            </div>
             <div className="text-purple-500 font-jojo text-xl mb-2">Nenhuma matéria cadastrada!</div>
             <p className="text-purple-400 text-sm">Adicione suas matérias para começar</p>
+            <p className="text-purple-500/50 text-xs mt-2 font-body italic">...um vazio bizarro...</p>
           </div>
         )}
 
@@ -329,11 +387,17 @@ export default function DisciplinasPage() {
           const porcentagem = faltasMaximas > 0 ? (faltasUsadas / faltasMaximas) * 100 : 0;
           const corBarra = porcentagem >= 80 ? 'bg-red-500' : porcentagem >= 50 ? 'bg-yellow-500' : 'bg-green-500';
           const isExpanded = expandedId === disc.id;
+          const podeFaltarHoje = info?.podeFaltarHoje ?? false;
+          const atingiuLimite = info?.atingiuLimite ?? false;
+          const bloqueadaPorOutra = info?.bloqueadaPorOutra ?? false;
+          const jaFaltouHoje = faltasHoje.has(disc.id);
 
           return (
             <div
               key={disc.id}
-              className="bg-gradient-to-r from-purple-900/60 to-purple-800/40 border-2 border-purple-600/50 rounded-2xl overflow-hidden hover:border-jojo-gold/50 transition-all group"
+              className={`bg-gradient-to-r from-purple-900/60 to-purple-800/40 border-2 rounded-2xl overflow-hidden hover:border-jojo-gold/50 transition-all group stand-aura ${
+                porcentagem >= 80 ? 'border-red-500/50 danger-hatching' : porcentagem >= 50 ? 'border-yellow-500/40' : 'border-purple-600/50'
+              }`}
             >
               {/* Header - always visible */}
               <div
@@ -346,7 +410,7 @@ export default function DisciplinasPage() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                <h3 className="font-jojo text-lg text-jojo-gold flex-1 truncate">{disc.nome}</h3>
+                <h3 className="font-jojo text-lg text-jojo-gold flex-1 truncate">{disc.nome}{porcentagem >= 80 && <span className="text-red-400 text-xs ml-1 jojo-go-float">ゴ</span>}</h3>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className={`text-sm font-bold ${porcentagem >= 80 ? 'text-red-400' : porcentagem >= 50 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {faltasUsadas}/{faltasMaximas}
@@ -383,11 +447,32 @@ export default function DisciplinasPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRegistrarFalta(disc.id); }}
-                        disabled={registrando === disc.id && faltaPlanejadaId !== disc.id}
-                        className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-2 px-3 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                        disabled={!podeFaltarHoje || (registrando === disc.id && faltaPlanejadaId !== disc.id)}
+                        className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-2 px-3 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 action-burst"
                       >
                         {registrando === disc.id && faltaPlanejadaId !== disc.id ? (
                           <span className="animate-pulse text-sm">Registrando...</span>
+                        ) : jaFaltouHoje ? (
+                          <>
+                            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="text-sm">Falta Registrada</span>
+                          </>
+                        ) : atingiuLimite ? (
+                          <>
+                            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
+                            <span className="text-sm">Limite Atingido</span>
+                          </>
+                        ) : bloqueadaPorOutra ? (
+                          <>
+                            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            <span className="text-sm">Dia Bloqueado</span>
+                          </>
                         ) : (
                           <>
                             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -530,6 +615,29 @@ export default function DisciplinasPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Faltas pré-existentes */}
+                  <div className="bg-purple-950/30 rounded-xl p-3">
+                    <p className="text-purple-300 text-xs font-bold mb-2">Faltas pré-existentes</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={faltasIniciaisEdit[disc.id] ?? String(disc.faltasIniciais ?? 0)}
+                        onChange={(e) => setFaltasIniciaisEdit((prev) => ({ ...prev, [disc.id]: e.target.value }))}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-1 bg-purple-900/50 border-2 border-purple-600 rounded-xl px-3 py-2 text-white text-sm focus:border-jojo-gold focus:outline-none transition-colors"
+                      />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleSalvarFaltasIniciais(disc.id); }}
+                        disabled={salvandoFaltasIniciais === disc.id}
+                        className="bg-jojo-gold text-jojo-darkPurple font-bold px-4 py-2 rounded-xl text-sm disabled:opacity-50 transition-all active:scale-95"
+                      >
+                        {salvandoFaltasIniciais === disc.id ? '...' : 'Salvar'}
+                      </button>
+                    </div>
+                    <p className="text-purple-500 text-xs mt-1">Faltas que você já tinha antes de usar o sistema</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -660,9 +768,9 @@ export default function DisciplinasPage() {
 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-jojo-gold to-yellow-500 text-jojo-darkPurple font-jojo text-xl py-3 rounded-xl hover:from-yellow-400 hover:to-jojo-gold transition-all shadow-lg shadow-yellow-500/20 active:scale-95"
+                  className="w-full bg-gradient-to-r from-jojo-gold to-yellow-500 text-jojo-darkPurple font-jojo text-xl py-3 rounded-xl hover:from-yellow-400 hover:to-jojo-gold transition-all shadow-lg shadow-yellow-500/20 active:scale-95 action-burst"
                 >
-                  {editingId ? 'ATUALIZAR!' : 'CADASTRAR!'}
+                  {editingId ? '「ATUALIZAR!」' : '「CADASTRAR!」'}
                 </button>
               </form>
             </div>
@@ -704,9 +812,9 @@ export default function DisciplinasPage() {
 
                 <button
                   onClick={handleSaveConfig}
-                  className="w-full bg-gradient-to-r from-jojo-gold to-yellow-500 text-jojo-darkPurple font-jojo text-xl py-3 rounded-xl hover:from-yellow-400 hover:to-jojo-gold transition-all shadow-lg shadow-yellow-500/20 active:scale-95"
+                  className="w-full bg-gradient-to-r from-jojo-gold to-yellow-500 text-jojo-darkPurple font-jojo text-xl py-3 rounded-xl hover:from-yellow-400 hover:to-jojo-gold transition-all shadow-lg shadow-yellow-500/20 active:scale-95 action-burst"
                 >
-                  SALVAR!
+                  「SALVAR!」
                 </button>
               </div>
             </div>

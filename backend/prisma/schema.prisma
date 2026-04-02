@@ -26,6 +26,7 @@ model Disciplina {
   horas             Int
   porcentagemFalta  Float    // porcentagem que cada falta representa
   diasSemana        String   // JSON array: ["segunda", "quarta"]
+  faltasIniciais    Int      @default(0) // faltas pré-existentes antes de usar o sistema
   userId            String
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   faltas            Falta[]

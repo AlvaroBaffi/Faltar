@@ -6,5 +6,6 @@ export class Disciplina {
     public readonly porcentagemFalta: number,
     public readonly diasSemana: string[],
     public readonly userId: string,
+    public readonly faltasIniciais: number = 0,
   ) {}
 }
