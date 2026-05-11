@@ -5,3 +5,6 @@ prisma/dev.db
 .env
 .env.local
 *.db
+
+# Turborepo
+.turbo/
